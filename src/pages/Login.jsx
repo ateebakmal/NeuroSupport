@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 
 export default function Login() {
-  const { signIn, signInDemo } = useAuth()
+  const { signIn } = useAuth()
   const nav = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -16,11 +16,6 @@ export default function Login() {
     try { await signIn(email, password); nav('/learners') }
     catch (e) { setErr(e.message || 'Login failed') }
     finally { setLoading(false) }
-  }
-
-  const demo = async () => {
-    setLoading(true)
-    try { await signInDemo(); nav('/learners') } finally { setLoading(false) }
   }
 
   return (
@@ -37,14 +32,8 @@ export default function Login() {
         {err && <div className="text-sm text-red-600">{err}</div>}
         <button className="btn-primary w-full" disabled={loading}>{loading?'Signing in…':'Login'}</button>
       </form>
-      <div className="mt-4 space-y-2 text-center">
-        <button onClick={demo} className="btn-secondary w-full">Continue as Demo User</button>
-        <div className="text-sm text-slate-500">
-          <a href="#" className="hover:text-brand-700">Forgot password?</a>
-        </div>
-        <div className="text-sm text-slate-500">
-          New here? <Link to="/signup" className="text-brand-700 font-medium">Create an account</Link>
-        </div>
+      <div className="mt-4 text-center text-sm text-slate-500">
+        New here? <Link to="/signup" className="text-brand-700 font-medium">Create an account</Link>
       </div>
     </AuthShell>
   )

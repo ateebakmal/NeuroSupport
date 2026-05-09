@@ -56,23 +56,6 @@ export function AuthProvider({ children }) {
     return signIn(email, password)
   }
 
-  // Demo login: tries Supabase credentials, auto-creates account on first use.
-  // Falls back to localStorage when Supabase is not configured.
-  const signInDemo = async () => {
-    if (!hasSupabase) {
-      const u = { id: 'demo-user', email: 'demo@neurosupport.app' }
-      localStorage.setItem(LS_USER, JSON.stringify(u))
-      setUser(u)
-      return u
-    }
-    try {
-      return await signIn('demo@neurosupport.app', 'demo1234!')
-    } catch {
-      // Account doesn't exist yet — create it on first demo login
-      return await signUp('demo@neurosupport.app', 'demo1234!')
-    }
-  }
-
   const signOut = async () => {
     if (hasSupabase) await supabase.auth.signOut()
     localStorage.removeItem(LS_USER)
@@ -80,7 +63,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthCtx.Provider value={{ user, loading, signIn, signUp, signInDemo, signOut }}>
+    <AuthCtx.Provider value={{ user, loading, signIn, signUp, signOut }}>
       {children}
     </AuthCtx.Provider>
   )
