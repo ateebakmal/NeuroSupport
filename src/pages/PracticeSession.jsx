@@ -4,7 +4,7 @@ import * as faceapi from '@vladmandic/face-api'
 import { findScenario } from '../data/scenarios.js'
 import { useLearner } from '../context/LearnerContext.jsx'
 import { api } from '../lib/api.js'
-import { getCoachingResponse, mapExpressionsToState } from '../lib/coachingAgent.js'
+import { getCoachingResponseAI, getCoachingResponse, mapExpressionsToState, hasGroq } from '../lib/coachingAgent.js'
 
 // Mock expressions used when webcam is off
 const MOCK_EXPRESSIONS = ['Neutral', 'Happy', 'Sad', 'Surprised']
@@ -146,9 +146,9 @@ export default function PracticeSession() {
 
       // ── Adaptive coaching — fires only on state change ──────
       if (next !== prevState.current) {
-        console.log(`[coach] State changed: ${prevState.current} → ${next} (hints:${hintsRef.current} stress:${stressRef.current} step:${step})`)
+        console.log(`[coach] State changed: ${prevState.current} → ${next} (hints:${hintsRef.current} stress:${stressRef.current} step:${step}) source:${hasGroq ? 'groq' : 'rules'}`)
         prevState.current = next
-        const { message, actions: acts } = getCoachingResponse({
+        const coachCtx = {
           state:       next,
           history:     [...timelineRef.current],
           step,
@@ -157,7 +157,8 @@ export default function PracticeSession() {
           stressCount: stressRef.current,
           learner,
           scenarioId:  scenario.id,
-        })
+        }
+        const { message, actions: acts } = await getCoachingResponseAI(coachCtx)
         console.log(`[coach] Message: "${message}"`, acts.length ? `| Actions: ${acts.join(', ')}` : '')
         setCoach(message)
         setActions(acts)
@@ -336,7 +337,7 @@ export default function PracticeSession() {
         <div className="card bg-gradient-to-br from-brand-500 to-brand-700 text-white border-0">
           <div className="flex items-center justify-between mb-2">
             <div className="text-xs uppercase opacity-80 font-semibold">Adaptive Coach</div>
-            <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full opacity-80">Rule-based · Context-aware</span>
+            <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full opacity-80">{hasGroq ? 'Llama 3.3 · Groq' : 'Rule-based · Fallback'}</span>
           </div>
           <p className="text-lg font-medium leading-snug">{coach}</p>
           {actions.length > 0 && (
@@ -357,7 +358,11 @@ export default function PracticeSession() {
             {paused ? 'Resume' : 'Pause'}
           </button>
           <button
-            onClick={() => { setHints((h) => h + 1); setCoach(getCoachingResponse({ state, history: timelineRef.current, step, totalSteps: scenario.steps.length, hints: hintsRef.current + 1, stressCount: stressRef.current, learner, scenarioId: scenario.id }).message) }}
+            onClick={async () => {
+              setHints((h) => h + 1)
+              const { message } = await getCoachingResponseAI({ state, history: timelineRef.current, step, totalSteps: scenario.steps.length, hints: hintsRef.current + 1, stressCount: stressRef.current, learner, scenarioId: scenario.id })
+              setCoach(message)
+            }}
             className="btn-secondary text-sm"
           >
             Retry Step

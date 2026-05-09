@@ -1,6 +1,7 @@
 // ============================================================
 // NeuroSupport — Adaptive Coaching Agent
-// Rule-based engine that considers 8 contextual factors:
+// Primary: Groq LLM (llama-3.3-70b-versatile) when API key present
+// Fallback: Rule-based engine considering 8 contextual factors:
 //   1. Current detected state
 //   2. How many consecutive detections of same state
 //   3. Trend over last 6 detections (improving / stable / worsening)
@@ -10,6 +11,65 @@
 //   7. Total stress count this session
 //   8. Learner difficulty profile (Beginner / Intermediate / Advanced)
 // ============================================================
+
+import OpenAI from 'openai'
+
+const groqClient = import.meta.env.VITE_GROQ_API_KEY
+  ? new OpenAI({
+      apiKey: import.meta.env.VITE_GROQ_API_KEY,
+      baseURL: 'https://api.groq.com/openai/v1',
+      dangerouslyAllowBrowser: true,
+    })
+  : null
+
+export const hasGroq = Boolean(groqClient)
+
+export async function getCoachingResponseAI(ctx) {
+  if (!groqClient) return getCoachingResponse(ctx)
+
+  const { state, history, step, totalSteps, hints, stressCount, learner, scenarioId } = ctx
+  const consecutive = countConsecutive(history, state)
+  const trend = getTrend(history)
+
+  const prompt = `You are a warm, supportive coach in a social skills training app for neurodiverse learners (autism, ADHD, anxiety).
+
+Learner: ${learner.name}, difficulty: ${learner.difficulty}
+Scenario: ${scenarioId}, Step ${step + 1} of ${totalSteps}
+Current emotional state: ${state}
+Consecutive detections of this state: ${consecutive}
+Emotion trend over last 6 detections: ${trend}
+Total stress moments this session: ${stressCount}
+Total hints given so far: ${hints}
+
+Reply ONLY with a JSON object in this exact shape:
+{"message": "...", "actions": ["..."]}
+
+Rules:
+- message: 1-2 warm sentences tailored to the context. Use the learner's name occasionally.
+- actions: 0-3 short labels like "Slowing pacing" or "Breathing exercise". Use [] if state is Calm.
+- Stressed: calming and grounding. Escalate warmth if consecutive >= 3 or stressCount >= 4.
+- Confused: specific guidance. Offer a concrete tip if hints >= 3.
+- Calm: brief encouraging praise. Strong praise if recovering from Stressed or Confused.
+- Never be patronizing. Sound human, not robotic.`
+
+  try {
+    const completion = await groqClient.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      max_tokens: 150,
+      response_format: { type: 'json_object' },
+    })
+    const parsed = JSON.parse(completion.choices[0].message.content)
+    return {
+      message: parsed.message || 'Keep going, you are doing well.',
+      actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+    }
+  } catch (err) {
+    console.warn('[groq] API error, falling back to rule-based:', err.message)
+    return getCoachingResponse(ctx)
+  }
+}
 
 // Step-specific fallback hints per scenario — used when learner is very stuck
 const STEP_HINTS = {
